@@ -5,9 +5,14 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import {
   buildJobNotifications,
+  clearReadIds,
   getNewItems,
   getUnreadCount,
+  loadClearedBefore,
+  loadReadIds,
   parseRealtimeNotifications,
+  saveClearedBefore,
+  saveReadIds,
   type RealtimeNotification,
 } from "@/lib/notifications";
 import { toast } from "@/lib/toast";
@@ -30,7 +35,8 @@ async function fetchNotifications(): Promise<RealtimeNotification[]> {
 }
 
 export function useRealtimeNotifications() {
-  const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
+  const [seenIds, setSeenIds] = useState<Set<string>>(() => loadReadIds());
+  const [clearedBefore, setClearedBefore] = useState<number>(() => loadClearedBefore());
   const knownIdsRef = useRef<Set<string>>(new Set());
 
   const query = useQuery({
@@ -42,6 +48,10 @@ export function useRealtimeNotifications() {
   });
 
   const notifications = useMemo(() => query.data ?? [], [query.data]);
+
+  useEffect(() => {
+    saveReadIds(seenIds);
+  }, [seenIds]);
 
   useEffect(() => {
     if (!notifications.length) return;
@@ -60,15 +70,35 @@ export function useRealtimeNotifications() {
     knownIdsRef.current = new Set(notifications.map((item) => item.id));
   }, [notifications]);
 
+  const visible = useMemo(
+    () => notifications.filter((item) => Date.parse(item.createdAt) > clearedBefore),
+    [notifications, clearedBefore],
+  );
+
   const enriched = useMemo(
-    () => notifications.map((item) => ({ ...item, read: seenIds.has(item.id) })),
-    [notifications, seenIds],
+    () => visible.map((item) => ({ ...item, read: seenIds.has(item.id) })),
+    [visible, seenIds],
   );
 
   const unreadCount = useMemo(() => getUnreadCount(enriched), [enriched]);
 
   const markAllRead = () => {
-    setSeenIds(new Set(notifications.map((item) => item.id)));
+    setSeenIds(new Set(visible.map((item) => item.id)));
+  };
+
+  const markOneRead = (id: string) => {
+    setSeenIds((prev) => {
+      if (prev.has(id)) return prev;
+      return new Set([...prev, id]);
+    });
+  };
+
+  const clearAll = () => {
+    const now = Date.now();
+    setClearedBefore(now);
+    saveClearedBefore(now);
+    setSeenIds(new Set());
+    clearReadIds();
   };
 
   return {
@@ -78,5 +108,7 @@ export function useRealtimeNotifications() {
     isError: query.isError,
     refresh: query.refetch,
     markAllRead,
+    markOneRead,
+    clearAll,
   };
 }

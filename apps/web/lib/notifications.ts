@@ -52,3 +52,51 @@ export function getNewItems(
 ): RealtimeNotification[] {
   return nextItems.filter((item) => !previousIds.has(item.id));
 }
+
+const READ_IDS_KEY = "lance.notifications.read.v1";
+const CLEARED_BEFORE_KEY = "lance.notifications.cleared.v1";
+
+export function loadReadIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(READ_IDS_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((id): id is string => typeof id === "string"));
+  } catch {
+    return new Set();
+  }
+}
+
+export function saveReadIds(ids: Set<string>): void {
+  try {
+    localStorage.setItem(READ_IDS_KEY, JSON.stringify([...ids]));
+  } catch {
+    // ignore storage errors
+  }
+}
+
+export function clearReadIds(): void {
+  try {
+    localStorage.removeItem(READ_IDS_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+export function loadClearedBefore(): number {
+  try {
+    const raw = localStorage.getItem(CLEARED_BEFORE_KEY);
+    return raw ? Number(raw) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function saveClearedBefore(ts: number): void {
+  try {
+    localStorage.setItem(CLEARED_BEFORE_KEY, String(ts));
+  } catch {
+    // ignore
+  }
+}
